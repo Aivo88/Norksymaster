@@ -10,6 +10,7 @@
 
     <application
         android:label="Norsky Master"
+        android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:allowBackup="false">
 
