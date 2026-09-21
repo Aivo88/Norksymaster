@@ -13,7 +13,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
       - name: Build debug APK
