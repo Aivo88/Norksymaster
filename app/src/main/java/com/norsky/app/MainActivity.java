@@ -9,6 +9,7 @@ import android.content.IntentFilter;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.PowerManager;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
@@ -27,11 +28,31 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private WifiManager.WifiLock wifiLock;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // Show over the lock screen and turn the screen on, so the kiosk keeps
+        // running and syncing even if the tablet locks.
+        if (Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(true);
+            setTurnScreenOn(true);
+        } else {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                    | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                    | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+        }
+        // Keep the CPU awake (tablets run on the charger) so polling never stops.
+        try {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "norsky:cpu");
+                wakeLock.setReferenceCounted(false);
+                wakeLock.acquire();
+            }
+        } catch (Exception ignored) {}
 
         web = new WebView(this);
         WebSettings s = web.getSettings();
@@ -50,6 +71,7 @@ public class MainActivity extends Activity {
 
         setContentView(web);
         web.loadUrl(URL);
+        web.resumeTimers();   // keep JS timers (polling) alive
 
         WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         if (wm != null) {
@@ -107,7 +129,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override protected void onResume() { super.onResume(); hideSystemUi(); }
+    @Override protected void onResume() { super.onResume(); hideSystemUi(); if (web != null) web.resumeTimers(); }
     @Override public void onWindowFocusChanged(boolean hasFocus) { super.onWindowFocusChanged(hasFocus); if (hasFocus) hideSystemUi(); }
     private void hideSystemUi() {
         getWindow().getDecorView().setSystemUiVisibility(
@@ -121,6 +143,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onDestroy() {
         if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         if (web != null) web.destroy();
         super.onDestroy();
     }
